@@ -12,5 +12,13 @@ dependencies = [
     "notebook>=7.5.2",
     "pandas>=2.3.3",
     "scikit-learn>=1.8.0",
+    "joblib",
+    "pydantic>=2.12.5",
     "seaborn>=0.13.2",
 ]
+
+[tool.setuptools]
+packages = ["cli"]
+
+[project.scripts]
+airbnb-predict = "cli.main:main"

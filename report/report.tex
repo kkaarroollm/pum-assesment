@@ -1,0 +1,322 @@
+\documentclass[12pt,a4paper]{article}
+
+\usepackage[margin=1in]{geometry}
+\usepackage{graphicx}
+\usepackage{amsmath}
+\usepackage{booktabs}
+\usepackage{float}
+\usepackage{hyperref}
+\usepackage{caption}
+
+\hypersetup{
+    colorlinks=True,
+    linkcolor=black,
+    urlcolor=blue
+}
+
+\title{Airbnb Pricing and Value Assessment in New York City Using Machine Learning}
+\author{Karol Marszałek - S31952}
+\date{\today}
+
+\begin{document}
+\maketitle
+\newpage
+
+\begin{abstract}
+In this project, I analyze Airbnb pricing in New York City using machine learning
+methods.
+While browsing Airbnb listings, I noticed that prices often vary
+significantly even for listings that appear similar.
+The goal of this work was
+to better understand what drives these price differences and to build models
+that can both estimate a fair market price and assess whether a given listing is
+worth its price.
+I followed a complete data science workflow, focusing not only
+on predictive performance, but also on interpretability, evaluation, and
+understanding model behavior.
+\end{abstract}
+
+\newpage
+\tableofcontents
+\newpage
+
+\section{Problem Description}\label{sec:problem-description}
+
+When I started working on this project, I approached it from a very practical
+perspective.
+As an Airbnb user, I often wondered whether a given listing was
+fairly priced or simply expensive because of market noise.
+At the same time, hosts face the opposite problem: deciding how much to charge to stay competitive.
+
+The goal of this project was therefore to answer two concrete questions:
+\begin{itemize}
+    \item What is a reasonable market price for a given Airbnb listing?
+    \item Given an advertised price, is the listing worth it compared to similar
+    listings?
+\end{itemize}
+
+\section{Data}\label{sec:data}
+
+\subsection{Data Sources}\label{subsec:data-sources}
+
+I used two publicly available datasets:
+\begin{itemize}
+    \item \textbf{NYC Airbnb Open Data (2019)} \\
+    \url{https://www.kaggle.com/datasets/dgomonov/new-york-city-airbnb-open-data}
+    \item \textbf{MTA Subway Stations Dataset} \\
+    \url{https://catalog.data.gov/dataset/mta-subway-stations}
+\end{itemize}
+
+The Airbnb dataset provides detailed information about listings, while the
+subway dataset allowed me to incorporate transportation accessibility, which I
+considered an important real-world factor.
+
+\subsection{Temporal Scope and Inflation Considerations}\label{subsec:temporal-scope-and-inflation-considerations}
+
+The Airbnb dataset reflects market conditions from 2019.
+Because housing prices and short-term rental markets evolve over time, the absolute price levels learned
+by the models cannot be interpreted as present-day prices.
+To make it more realistic, it would be necessary to adjust prices for inflation and market trends, such as
+using external housing market indices.
+
+\subsection{Data Structure}\label{subsec:data-structure}
+
+The Airbnb dataset contains 48,895 observations and 16 original variables.
+I grouped the variables as follows:
+\begin{itemize}
+    \item \textbf{Numerical variables}: price, availability\_365,
+    minimum\_nights, number\_of\_reviews, reviews\_per\_month,
+    calculated\_host\_listings\_count
+    \item \textbf{Categorical variables}: room\_type,
+    neighbourhood\_group, neighbourhood
+    \item \textbf{Geographic variables}: latitude, longitude
+    \item \textbf{Identifier variables}: id, host\_id, name, host\_name
+\end{itemize}
+
+\section{Data Cleaning and Preparation}\label{sec:data-cleaning-and-preparation}
+
+Before any modeling, I carefully inspected the dataset.
+I verified data types, checked missing values, and tried to understand what those missing values
+actually meant.
+For example, missing values in \textit{reviews\_per\_month} and
+\textit{last\_review} usually indicate listings without recent activity rather than data errors.
+
+Instead of aggressively removing rows or outliers, I chose to preserve most of the data.
+Airbnb prices are naturally noisy, and removing extreme values too early could distort the structure.
+I addressed this variability later through model choice and evaluation metrics.
+
+\section{Technology Stack}\label{sec:technology-stack}
+
+The project was implemented using the standard Python data science stack.
+All analysis and modeling steps were carried out using:
+\begin{itemize}
+    \item \textbf{Python} as the main programming language,
+    \item \textbf{pandas} for data loading, cleaning, and preparation,
+    \item \textbf{NumPy} for numerical computations,
+    \item \textbf{scikit-learn} for machine learning models, evaluation metrics,
+    and cross-validation,
+    \item \textbf{matplotlib} and \textbf{seaborn} for data visualization,
+    \item \textbf{Jupyter Notebook} for exploratory analysis and iterative
+    development.
+\end{itemize}
+
+\section{Feature Engineering}\label{sec:feature-engineering}
+
+\subsection{Motivation}\label{subsec:motivation}
+
+Latitude and longitude are difficult to interpret directly, both for humans and for many models.
+From a user perspective, location is usually understood in terms
+of proximity to important places rather than raw coordinates.
+For this reason, I engineered additional spatial features.
+
+\subsection{Distance-Based Features}\label{subsec:distance-based-features}
+
+Using the Haversine formula, I computed:
+\begin{itemize}
+    \item Distance to the nearest subway station (meters) as there are many of them,
+    \item distance to the center of Manhattan (kilometers).
+\end{itemize}
+The center of Manhattan was approximated using the coordinates of Times Square:
+\[
+\text{Times Square} = (40.7580^\circ N, 73.9855^\circ W)
+\]
+
+\subsection{Interpretation of Distance and Availability}\label{subsec:interpretation-of-distance-and-availability}
+
+Distance to Manhattan acts as a proxy for proximity to business districts,
+tourist attractions, and economic activity.
+Listings closer to Manhattan tend to be more expensive and attract higher demand.
+
+The Distance to the nearest subway station captures transportation accessibility, which is a key factor in New York.
+
+I also observed that \textit{availability\_365} does not measure quality.
+In practice, high availability often corresponds to low demand or overpricing.
+Listings that are far from Manhattan and available most of the year are often
+overpriced relative to comparable listings.
+
+\section{Exploratory Data Analysis}\label{sec:exploratory-data-analysis}
+
+\subsection{Price Distribution}\label{subsec:price-distribution}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.7\textwidth]{../figures/eda/price_distribution_raw}
+\caption{Raw price distribution.}\label{fig:figure}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.7\textwidth]{../figures/eda/price_distribution_log}
+\caption{Log-transformed price distribution.}\label{fig:figure2}
+\end{figure}
+
+Prices are strongly right-skewed, motivating the use of non-linear models.
+
+\subsection{Room Type and Neighborhood}\label{subsec:room-type-and-neighborhood}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.7\textwidth]{../figures/eda/price_by_room_type}
+\caption{Price distribution by room type.}\label{fig:figure3}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.7\textwidth]{../figures/eda/price_by_neighbourhood_group}
+\caption{Price distribution by neighborhood group.}\label{fig:figure4}
+\end{figure}
+
+\subsection{Availability and Spatial Patterns}\label{subsec:availability-and-spatial-patterns}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.7\textwidth]{../figures/eda/price_vs_availability}
+\caption{Price vs availability.}\label{fig:figure5}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.8\textwidth]{../figures/eda/spatial_price_distribution}
+\caption{Spatial distribution of prices.}\label{fig:figure6}
+\end{figure}
+
+\subsection{Correlation Analysis}\label{subsec:correlation-analysis}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.8\textwidth]{../figures/eda/correlation_matrix}
+\caption{Correlation matrix of numerical features.}\label{fig:figure7}
+\end{figure}
+
+Linear correlations with price are generally weak, supporting the use of
+tree-based models.
+
+\section{Regression Modeling}\label{sec:regression-modeling}
+
+The first modeling task was regression, where the goal was to predict nightly
+price:
+\[
+y = \text{price}
+\]
+
+I used the same 80/20 train--test split for all regression models to ensure a fair comparison.
+I started with a simple baseline model and gradually increased model complexity.
+
+\subsection{Models and Evaluation}\label{subsec:models-and-evaluation}
+
+\[
+MAE = \frac{1}{n}\sum |y-\hat{y}|,\quad
+RMSE = \sqrt{\frac{1}{n}\sum (y-\hat{y})^2}
+\]
+
+\begin{table}[H]
+\centering
+\caption{Regression model performance.}
+\begin{tabular}{lccc}
+\toprule
+Model & MAE & RMSE & CV RMSE Mean \\
+\midrule
+Linear Regression & 49.78 & 79.66 & 79.85 \\
+Decision Tree & 46.97 & 78.40 & 80.59 \\
+Random Forest & \textbf{44.26} & \textbf{72.49} & \textbf{74.32} \\
+\bottomrule
+\end{tabular}\label{tab:table}
+\end{table}
+
+\subsection{Cross-Validation Strategy}\label{subsec:cross-validation-strategy}
+
+In addition to a single train-test split, I applied $k$-fold cross-validation
+with $k=5$ to evaluate model stability.
+This helped identify overfitting in decision trees and confirmed that random forests achieve a better balance
+between bias and variance.
+
+\subsection{Regression Feature Importance}\label{subsec:regression-feature-importance}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.7\textwidth]{../figures/regression/feature_importances_regression}
+\caption{Feature importance from Random Forest regression.}\label{fig:figure8}
+\end{figure}
+
+Distance to Manhattan and room type emerged as the most influential predictors.
+
+\section{Classification Modeling}\label{sec:classification-modeling}
+
+After regression, I formulated a classification task to answer a different
+question: whether a listing is worth its advertised price compared to similar
+listings.
+
+\subsection{Evaluation Metrics}\label{subsec:evaluation-metrics}
+
+\[
+Precision=\frac{TP}{TP+FP},\quad
+Recall=\frac{TP}{TP+FN},\quad
+F1=2\frac{PR}{P+R}
+\]
+
+\begin{table}[H]
+\centering
+\caption{Classification model performance.}
+\begin{tabular}{lcccc}
+\toprule
+Model & Precision & Recall & F1 & ROC-AUC \\
+\midrule
+Logistic Regression & 0.77 & 0.02 & 0.03 & 0.56 \\
+Decision Tree & 0.70 & 0.73 & 0.71 & 0.77 \\
+Random Forest & \textbf{0.70} & \textbf{0.74} & \textbf{0.72} & \textbf{0.80} \\
+\bottomrule
+\end{tabular}\label{tab:table2}
+\end{table}
+
+\subsection{Interpretation of Classification Confidence}\label{subsec:interpretation-of-classification-confidence}
+
+During testing and while building the CLI application, I observed that predicted
+confidence values often remain close to 40–50\%.
+This reflects genuine market ambiguity rather than a modeling error.
+The classifier learns probabilistic patterns from historical data and does not see the user provided price, which
+explains moderate confidence levels.
+
+\subsection{ROC Curve and Feature Importance}\label{subsec:roc-curve-and-feature-importance}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.7\textwidth]{../figures/classification/roc_curve_comparison}
+\caption{ROC curve comparison.}\label{fig:figure9}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.7\textwidth]{../figures/classification/feature_importances_classification}
+\caption{Feature importance from Random Forest classification.}\label{fig:figure10}
+\end{figure}
+
+\section{Summary and Conclusions}\label{sec:summary-and-conclusions}
+
+In this project, I applied machine learning models to analyze Airbnb pricing in New York City.
+The results show that location, accessibility, room type,
+and availability are key drivers of price, while pricing behavior remains noisy and ambiguous.
+
+Tree-based models performed better than linear models, indicating the importance of non-linear relationships.
+At the same time, moderate classification confidence highlights natural market uncertainty.
+
+\end{document}
